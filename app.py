@@ -5,21 +5,27 @@ import pandas as pd
 import numpy as np
 from tensorflow.keras.models import load_model
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-import uvicorn
+import os
 
 app = FastAPI()
 
 # --- CORS ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # for dev, restrict later
+    allow_origins=["*"],  # You can restrict this to your domain later
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load pre-trained model (place your model file in the same folder)
-model = load_model("lstm_model.keras")
+# Load pre-trained model - handle path for Render
+try:
+    model = load_model("lstm_model.keras")
+    print("✅ Model loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading model: {e}")
+    # Create a dummy model for testing if the real one fails
+    model = None
 
 # Example: categorical columns from your CSV
 categorical_columns = [
@@ -29,10 +35,24 @@ categorical_columns = [
 
 scaler = StandardScaler()
 
+@app.get("/")
+async def root():
+    return {"message": "League Match Predictor API", "status": "active"}
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "model_loaded": model is not None}
 
 @app.post("/predict_csv")
 async def predict_csv(file: UploadFile = File(...)):
     try:
+        if model is None:
+            return JSONResponse({"error": "Model not loaded"}, status_code=500)
+        
+        # Validate file type
+        if not file.filename.endswith('.csv'):
+            return JSONResponse({"error": "Please upload a CSV file"}, status_code=400)
+
         # Load uploaded CSV
         df = pd.read_csv(file.file)
 
@@ -91,7 +111,5 @@ async def predict_csv(file: UploadFile = File(...)):
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
 
-
-# Run locally (use uvicorn when in VSCode terminal)
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+# Remove the uvicorn run command for Render
+# Render will handle running the server
