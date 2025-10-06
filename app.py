@@ -18,13 +18,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load pre-trained model - handle path for Render
 try:
-    model = load_model("lstm_model.keras")
+    # Add custom objects and safe mode
+    model = load_model("lstm_model.keras", compile=False, safe_mode=False)
     print("✅ Model loaded successfully")
 except Exception as e:
     print(f"❌ Error loading model: {e}")
-    # Create a dummy model for testing if the real one fails
     model = None
 
 # Example: categorical columns from your CSV
@@ -110,6 +109,3 @@ async def predict_csv(file: UploadFile = File(...)):
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
-
-# Remove the uvicorn run command for Render
-# Render will handle running the server
