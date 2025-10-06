@@ -19,12 +19,12 @@ app.add_middleware(
 )
 
 try:
-    # Add custom objects and safe mode
-    model = load_model("lstm_model.keras", compile=False, safe_mode=False)
+    model = load_model("lstm_model.h5", compile=False)
     print("✅ Model loaded successfully")
 except Exception as e:
     print(f"❌ Error loading model: {e}")
     model = None
+
 
 # Example: categorical columns from your CSV
 categorical_columns = [
