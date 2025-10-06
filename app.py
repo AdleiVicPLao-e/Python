@@ -1,6 +1,6 @@
-# app.py
 from fastapi import FastAPI, UploadFile, File
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 import numpy as np
 from tensorflow.keras.models import load_model
@@ -8,6 +8,15 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import uvicorn
 
 app = FastAPI()
+
+# --- CORS ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # for dev, restrict later
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Load pre-trained model (place your model file in the same folder)
 model = load_model("lstm_model.keras")
@@ -20,19 +29,21 @@ categorical_columns = [
 
 scaler = StandardScaler()
 
+
 @app.post("/predict_csv")
 async def predict_csv(file: UploadFile = File(...)):
     try:
         # Load uploaded CSV
         df = pd.read_csv(file.file)
 
-        # Encode categorical values
-        label_encoders = {}
+        # Keep a copy of original names for response
+        df_original = df.copy()
+
+        # Encode categorical values for model
         for col in categorical_columns:
             if col in df.columns:
                 le = LabelEncoder()
                 df[col] = le.fit_transform(df[col].astype(str))
-                label_encoders[col] = le
 
         # Convert other columns to numeric
         for col in df.columns:
@@ -42,10 +53,9 @@ async def predict_csv(file: UploadFile = File(...)):
         # Scale features
         features_scaled = scaler.fit_transform(df)
 
-        # Ensure input matches model input shape
+        # Match model input shape
         expected_features = model.input_shape[2]
         current_features = features_scaled.shape[1]
-
         if current_features > expected_features:
             features_scaled = features_scaled[:, :expected_features]
         elif current_features < expected_features:
@@ -55,14 +65,28 @@ async def predict_csv(file: UploadFile = File(...)):
                 "constant"
             )
 
-        # Reshape for LSTM input (samples, timesteps, features)
+        # Reshape for LSTM input
         X = np.reshape(features_scaled, (features_scaled.shape[0], 1, features_scaled.shape[1]))
 
         # Predict
-        preds = model.predict(X)
-        results = (preds > 0.5).astype(int).flatten().tolist()
+        preds = model.predict(X).flatten()
+        results = (preds > 0.5).astype(int).tolist()
 
-        return JSONResponse({"predictions": results})
+        # Attach predictions to original dataframe
+        df_original['predicted_result'] = results
+        df_original['win_probability'] = (preds * 100).round(2)
+
+        # Team-level summary
+        team_probs = df_original.groupby('team')['win_probability'].mean().to_dict()
+
+        # Build response (using human-readable names)
+        response = {
+            "team_probabilities": team_probs,
+            "players": df_original[['side', 'position', 'player', 'team', 'champion',
+                                    'win_probability', 'predicted_result']].to_dict(orient='records')
+        }
+
+        return JSONResponse(response)
 
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=400)
