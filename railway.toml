@@ -1,9 +1,7 @@
-services:
-  - type: web
-    name: league-predictor
-    env: python
-    plan: free
-    runtime: python
-    pythonVersion: "3.9.18"
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+[build]
+builder = "Nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "uvicorn app:app --host 0.0.0.0 --port $PORT"
+healthcheckPath = "/"
