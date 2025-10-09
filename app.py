@@ -36,10 +36,14 @@ async def predict_csv(file: UploadFile = File(...)):
         # Load uploaded CSV
         df = pd.read_csv(file.file)
 
-        # Keep a copy of original names for response
+        # Keep original for output
         df_original = df.copy()
 
-        # Encode categorical values for model
+        # Drop target column if it exists
+        if 'results' in df.columns:
+            df = df.drop(columns=['results'])
+
+        # Encode categorical values
         for col in categorical_columns:
             if col in df.columns:
                 le = LabelEncoder()
@@ -53,7 +57,7 @@ async def predict_csv(file: UploadFile = File(...)):
         # Scale features
         features_scaled = scaler.fit_transform(df)
 
-        # Match model input shape
+        # Adjust for model input shape
         expected_features = model.input_shape[2]
         current_features = features_scaled.shape[1]
         if current_features > expected_features:
@@ -72,14 +76,13 @@ async def predict_csv(file: UploadFile = File(...)):
         preds = model.predict(X).flatten()
         results = (preds > 0.5).astype(int).tolist()
 
-        # Attach predictions to original dataframe
+        # Attach predictions to output
         df_original['predicted_result'] = results
         df_original['win_probability'] = (preds * 100).round(2)
 
-        # Team-level summary
+        # Team summary
         team_probs = df_original.groupby('team')['win_probability'].mean().to_dict()
 
-        # Build response (using human-readable names)
         response = {
             "team_probabilities": team_probs,
             "players": df_original[['side', 'position', 'player', 'team', 'champion',
