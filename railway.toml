@@ -1,5 +1,5 @@
 [service]
 name = "league-predictor"
-start = "uvicorn main:app --host 0.0.0.0 --port $PORT"
+start = "uvicorn app:app --host 0.0.0.0 --port $PORT"
 env = "python"
 build = "pip install -r requirements.txt"
